@@ -1,0 +1,286 @@
+<!DOCTYPE html>  
+<html lang="en">  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">  
+    <title>VoiceApp </title>  
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
+    <style>
+.page-header {
+	background: #0e9aa7;
+	margin: 0;
+	padding: 20px 0 10px;
+	color: #FFFFFF;
+	width: 100%;
+	z-index: 1
+}
+
+#chatbox {
+    width: 40%;
+    border-width: 0px 0px 0px 1px;
+    border-style:solid;
+    border-color:black;
+}
+
+#participants {
+    width: 60%;
+}
+
+.wrap {
+    display: flex;
+}
+
+
+.main {
+	height: 900px;
+}
+
+.chat-log {
+	padding: 40px 0 114px;
+	height: auto;
+	overflow: auto;
+}
+.chat-log__item {
+	background: #fafafa;
+	padding: 10px;
+	margin: 0 auto 20px;
+	max-width: 80%;
+	float: left;
+	border-radius: 4px;
+	box-shadow: 0 1px 2px rgba(0,0,0,.1);
+	clear: both;
+}
+
+.chat-log__item.chat-log__item--own {
+	float: right;
+	background: #adcbe3;
+	text-align: right;
+}
+
+.chat-form {
+	background: #DDDDDD;
+	padding: 40px 0;
+	position: fixed;
+	bottom: 0;
+	width: 40%;
+}
+
+.chat-log__author {
+	margin: 0 auto .5em;
+	font-size: 14px;
+	font-weight: bold;
+}
+    </style>
+</head>  
+<body> 
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">VoiceApp</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarText">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0"></ul>
+          <span class="navbar-text">
+              id : {{ id }}
+          </span>
+        </div>
+      </div>
+    </nav>
+<div class="wrap">
+  <div id="participants">
+<ul id="user-list" class="list-group">
+</ul>
+  </div>
+<div id="chatbox">
+<header class="page-header">
+  <div class="container ">
+    <h5>Chat</h5>
+  </div>
+</header>
+<div class="main">
+  <div class="container ">
+    <div id="chat-log-id" class="chat-log">
+    </div>
+  </div>
+  <div class="chat-form">
+    <div class="container ">
+      <form id="send-msg-form" class="form-horizontal">
+        <div class="row">
+          <div class="col-sm-10 col-xs-8">
+            <input id="send-msg-txt" type="text" class="form-control" id="" placeholder="Message" />
+          </div>
+          <div class="col-sm-2 col-xs-4">
+            <button id="send-msg-btn" type="button" class="btn btn-success btn-block">Send</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <!-- <script src="https://raw.githubusercontent.com/otalk/hark/master/hark.bundle.js"></script> -->
+    <script>
+
+	// First, checks if it isn't implemented yet.
+	if (!String.prototype.format) {
+	String.prototype.format = function() {
+	    var args = arguments;
+	    return this.replace(/{(\d+)}/g, function(match, number) { 
+	    return typeof args[number] != 'undefined'
+		? args[number]
+		: match
+	    ;
+	    });
+	};
+	}
+
+      var myStream, peer, dataConnections;
+        try {
+            peer = new Peer('{{ id }}', options={ debug: 2 });
+            console.log(peer.id);
+            navigator.mediaDevices.getUserMedia({video: false, audio: true}).then(function(stream) {
+                myStream = stream;
+
+                peer.on('error', function(err) {
+                    console.log(err);
+                });
+
+		document.getElementById('send-msg-btn').onclick = sendMessage;
+		document.getElementById('send-msg-form').addEventListener('submit', function(e) {
+		    e.preventDefault();
+		    sendMessage();
+		}, false);
+
+		dataConnections = [];
+
+		peer.on('connection', function(conn) {
+		    conn.on('open', function() {
+			dataConnections.push(conn);
+			conn.on('data', function(data) {
+			    console.log('Received', data);
+			    const newChatMessage = getChatMessage(data, conn.peer, false);
+			    document.getElementById('chat-log-id').appendChild(newChatMessage);
+			});
+		    });
+		});
+
+                peer.on('call', function(call) {
+                    console.log('someone calling');
+                    call.answer(myStream); 
+                    call.on('stream', function(remoteStream) {
+                        console.log('got stream from caller');
+			const newChatMessage = getChatMessage("hi", call.peer, false);
+			document.getElementById('chat-log-id').appendChild(newChatMessage);
+                        createAudio(remoteStream, call.peer);
+                    });
+                    call.on('error', function(err) {
+                        console.log('aha');
+                    });
+                });
+
+                {% for user in users %}
+                    {% if id != user %}
+			setTimeout(function() { callPeer('{{ user }}'); }, 2000);
+                    {% endif %}
+                {% endfor %}
+
+            }, function(err) {
+                console.log('Failed to get local stream' ,err);
+            });
+
+        } catch (error) {
+            console.error(error);
+        }
+
+      function sendMessage() {
+	const textElement = document.getElementById('send-msg-txt');
+	const text = textElement.value;
+	if (text != "") {
+	    textElement.value = "";
+	    dataConnections.forEach(function(conn) { conn.send(text); });
+	    const newChatMessage = getChatMessage(text, peer.id, true);
+	    document.getElementById('chat-log-id').appendChild(newChatMessage);
+	}
+      }
+
+
+      function callPeer(peer_id) {
+	console.log('trying ' + peer_id);
+	const call = peer.call(peer_id, myStream);
+	call.on('stream', function(remoteStream) {
+	    console.log('got the stream');
+	    createAudio(remoteStream, peer_id);
+	});
+	call.on('error', function(err) { 
+	    console.log(err);
+	});
+	const conn = peer.connect(peer_id);
+	conn.on('open', function() {
+	    dataConnections.push(conn);
+	    conn.on('data', function(data) {
+		console.log('Connected', data);
+		const newChatMessage = getChatMessage(data, conn.peer, false);
+		document.getElementById('chat-log-id').appendChild(newChatMessage);
+	    });
+	});
+      }
+
+
+      function getChatMessage(text, id, own) {
+	const time = new Date().toLocaleTimeString('en-US', { hour12: false, 
+                                             hour: "numeric", 
+                                             minute: "numeric"});
+	const wrapper= document.createElement('div');
+	var classText = "";
+	if (own) classText = "chat-log__item--own";
+	const htmlString =  `<div class="chat-log__item {3}">
+		<h3 class="chat-log__author">{0} <small>{1}</small></h3>
+		<div class="chat-log__message">{2}</div>
+		</div>`.format(id.substring(0,5), time, text, classText);
+	wrapper.innerHTML= htmlString;
+	return wrapper.firstChild;
+      }
+
+        function createAudio(stream, peer_id) {
+            try {
+                const container = document.createElement('li');
+		container.setAttribute('class', 'list-group-item');
+                const audio = document.createElement('audio');
+		audio.setAttribute('id', 'audio_' + peer_id);
+		const image = document.createElement('img');
+		image.setAttribute('width', '15px');
+		image.setAttribute('height', '15px');
+		image.setAttribute('id', 'img_' + peer_id);
+		image.src = 'https://image.flaticon.com/icons/svg/149/149658.svg';
+		image.onclick = function() {
+		    if(audio) {
+			if(audio.paused) {
+			    audio.play();
+			    image.src = "https://image.flaticon.com/icons/svg/149/149658.svg";
+			} else {
+			    audio.pause();
+			    image.src = "https://image.flaticon.com/icons/svg/149/149657.svg";
+			} 
+		    }
+		}
+                const text = document.createTextNode(peer_id + '                        ');
+                container.appendChild(text);
+                container.appendChild(audio);
+                container.appendChild(image);
+                document.getElementById('user-list').appendChild(container);
+                audio.autoplay = true;
+                audio.controls = false;
+                audio.srcObject = stream;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+    </script>
+</body>  
+</html>  

@@ -1,0 +1,110 @@
+<!DOCTYPE html>  
+<html lang="en">  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">  
+    <title>VoiceApp </title>  
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
+</head>  
+<body> 
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">VoiceApp</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarText">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0"></ul>
+          <span class="navbar-text">
+              id : {{ id }}
+          </span>
+        </div>
+      </div>
+    </nav>
+    <div class="col d-flex justify-content-center">
+        <div id="participants"></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <!-- <script src="https://raw.githubusercontent.com/otalk/hark/master/hark.bundle.js"></script> -->
+    <script>
+        var myStream;
+        try {
+            var peer = new Peer('{{ id }}', options={
+                debug: 3,
+                config: {
+                    'iceServers': [
+                        { url: 'stun:stun.l.google.com:19302' },
+                        { url: 'turn:relay.backups.cz', credential: 'webrtc', username: 'webrtc' }
+                      ] 
+                    }
+                });
+            console.log(peer.id);
+            navigator.mediaDevices.getUserMedia({video: false, audio: true}).then(function(stream) {
+                myStream = stream;
+                console.log('here');
+                peer.on('error', function(err) {
+                    console.log(err);
+                });
+
+                peer.on('open', function(id) {
+                    console.log(id);
+                });
+
+                peer.on('call', function(call) {
+                    console.log('someone calling');
+                    call.answer(myStream); 
+                    call.on('stream', function(remoteStream) {
+                        console.log('got stream from caller');
+                        createAudio(remoteStream, call.peer);
+                    });
+                    call.on('error', function(err) {
+                        console.log('aha');
+                    });
+                });
+
+                var call;
+                {% for user in users %}
+                    {% if id != user %}
+                        console.log('trying {{ user }}');
+                        call = peer.call('{{ user }}', myStream);
+                        call.on('stream', function(remoteStream) {
+                            console.log('got the stream');
+                            createAudio(remoteStream, "{{ user }}");
+                        });
+                        call.on('error', function(err) { 
+                            console.log(err);
+                        });
+                    {% endif %}
+                {% endfor %}
+
+            }, function(err) {
+                console.log('Failed to get local stream' ,err);
+            });
+
+        } catch (error) {
+            console.error(error);
+        }
+
+        function createAudio(stream, peer_id) {
+            try {
+                var container = document.createElement('div');
+                var audio = document.createElement('audio');
+                var text = document.createTextNode(peer_id);
+                container.appendChild(text);
+                container.appendChild(audio);
+                document.getElementById('participants').appendChild(container);
+                
+                audio.autoplay = true;
+                audio.controls = true;
+                audio.srcObject = stream;
+                return container;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+    </script>
+</body>  
+</html>  
